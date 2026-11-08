@@ -94,11 +94,38 @@ main{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom,0px))}
 .bub.me{align-self:flex-end;background:var(--accent);color:#04121a}
 .bub.them{align-self:flex-start;background:#1b2c44}
 #chat .cform{padding:.7rem;border-top:1px solid var(--edge);margin:0}
+.mbg{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none}
+#bgmask{position:fixed;inset:0;z-index:0;background:rgba(3,7,18,.55);pointer-events:none}
+.vid{display:block;width:100%;max-height:34rem;background:#000}
+#prog{height:.4rem;background:#14233a;border-radius:99px;margin-top:.8rem;overflow:hidden}
+#bar{height:100%;width:0;background:var(--accent);transition:width .2s}
+#tabs button{position:relative}
+.dot{width:.55rem;height:.55rem;border-radius:50%;background:#ef4444;flex:none}
+#msgDot{position:absolute;top:.55rem;left:calc(50% + .6rem)}
+.pcard{display:flex;gap:1rem;align-items:center;padding:1rem;margin-bottom:1rem}
+.pcard .ring .av,.pcard .ring .ini{width:4.5rem;height:4.5rem;font-size:1.6rem}
+.pinfo{flex:1;min-width:0}
+.pn{font-size:1.05rem}
+.stats{display:flex;gap:1rem;font-size:.82rem;color:var(--muted);margin:.3rem 0 .6rem}
+.stats b{color:var(--text)}
+#profBack{margin-bottom:.8rem}
+.skel{height:22rem;margin-bottom:1.2rem;padding:1rem;display:grid;gap:.8rem;align-content:start}
+.sk{border-radius:.8rem;background:linear-gradient(90deg,#14233a 25%,#1d3354 50%,#14233a 75%);background-size:200% 100%;animation:sh 1.3s infinite}
+.sk.a{height:2.2rem;width:50%}.sk.b{height:13rem}.sk.c{height:1rem;width:70%}
+@keyframes sh{to{background-position:-200% 0}}
+.post,.prow{animation:rise .45s both}
+section:not(.hidden){animation:fade .35s}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+@keyframes fade{from{opacity:0}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .toast{position:fixed;left:50%;bottom:calc(1.5rem + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#fff;color:#04121a;padding:.6rem 1rem;border-radius:.8rem;font-size:.85rem;font-weight:700;z-index:50}
 </style>
 </head>
 <body>
 <canvas id="bg" aria-hidden="true"></canvas>
+<video id="bgvid" class="mbg hidden" autoplay muted loop playsinline aria-hidden="true"></video>
+<img id="bgimg" class="mbg hidden" alt="" aria-hidden="true">
+<div id="bgmask" class="hidden"></div>
 <div class="layer">
 <header class="hidden" id="bar"><div class="in">
   <div class="brand"><b class="siteTitle">College Memory Vault</b><span id="who"></span></div>
@@ -150,13 +177,19 @@ main{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom,0px))}
       <form id="mform" class="cform"><input type="text" id="mtext" maxlength="1000" required placeholder="Write a message" aria-label="Write a message"><button class="btn main" type="submit">Send</button></form>
     </div>
   </section>
+<section id="profView" class="hidden">
+    <button class="btn" id="profBack" type="button">Back</button>
+    <div id="prof"></div>
+    <div id="profPosts"></div>
+  </section>
 </main>
 </div>
 
 <nav id="tabs" class="hidden" aria-label="Sections">
   <button type="button" data-v="feed" aria-current="page"><svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z"/></svg>Home</button>
   <button type="button" data-v="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Search</button>
-  <button type="button" data-v="msgs"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3zM3 6l9 7 9-7"/></svg>Messages</button>
+  <button type="button" data-v="msgs"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3zM3 6l9 7 9-7"/></svg>Messages<span id="msgDot" class="dot hidden"></span></button>
+  <button type="button" data-v="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</button>
 </nav>
 
 <dialog id="dlg">
@@ -167,8 +200,15 @@ main{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom,0px))}
     <div id="prevs" class="row" style="margin-top:.6rem"></div>
     <label for="cap">Your thoughts</label>
     <textarea id="cap" rows="4" maxlength="500" required></textarea>
+    <label for="vfile">Or a video (up to 1 minute)</label>
+    <input type="file" id="vfile" accept="video/*">
+    <div id="vinfo" class="when"></div>
+    <label for="life">Show in the feed for</label>
+    <select id="life"><option value="0">No limit</option><option value="2">2 hours</option><option value="6">6 hours</option><option value="12">12 hours</option><option value="24">24 hours</option></select>
+    <div class="when">After that time it stays on your profile.</div>
     <label for="song">Song: paste a YouTube link (optional)</label>
     <input type="text" id="song" placeholder="https://www.youtube.com/watch?v=...">
+    <div id="prog" class="hidden"><div id="bar"></div></div>
     <div class="err" id="perr" role="alert"></div>
     <div class="row" style="justify-content:flex-end;margin-top:1rem">
       <button type="button" class="btn" id="cancel">Cancel</button>
@@ -189,6 +229,16 @@ main{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom,0px))}
   <label for="sa">Accent colour</label><input type="color" id="sa" value="#38bdf8" style="height:2.4rem;padding:.2rem">
   <button class="btn main wide" id="saveSite">Save site look</button>
   <div class="ok" id="pmsg" role="status"></div>
+  <h3>Backgrounds (photo or video)</h3>
+  <label for="blType">Before login</label>
+  <select id="blType"><option value="default">Animation (default)</option><option value="image">Photo</option><option value="video">Video</option></select>
+  <input type="text" id="blUrl" placeholder="Paste a direct link, or upload below" style="margin-top:.4rem">
+  <input type="file" id="blFile" accept="image/*,video/*" style="margin-top:.4rem" aria-label="Upload login background">
+  <label for="baType">After login</label>
+  <select id="baType"><option value="default">Animation (default)</option><option value="image">Photo</option><option value="video">Video</option></select>
+  <input type="text" id="baUrl" placeholder="Paste a direct link, or upload below" style="margin-top:.4rem">
+  <input type="file" id="baFile" accept="image/*,video/*" style="margin-top:.4rem" aria-label="Upload app background">
+  <button class="btn main wide" id="saveBg">Save backgrounds</button>
   <h3>People who logged in</h3>
   <div id="members"></div>
 </dialog>
@@ -202,6 +252,7 @@ import {getFirestore,collection,addDoc,setDoc,query,orderBy,limit,where,onSnapsh
 const CONFIG = {apiKey:"AIzaSyCBzYWfg-9PsIf41g4cq5axF5z_P_BxgX4",authDomain:"scmch-vault.firebaseapp.com",projectId:"scmch-vault",appId:"1:262025222572:web:47aa35443b875b520bc209"};
 const ADMIN_USERNAME = "sachith p gowda";
 const ADMIN_EMAIL = "admin@scmch.app"; // the admin account you create in Firebase
+const CLOUD = {name:"", preset:""}; // Cloudinary cloud name and unsigned upload preset (for videos and uploaded backgrounds)
 /* =========================================== */
 
 const $ = id => document.getElementById(id);
@@ -280,14 +331,14 @@ function car(x,y,s,col){
   cx.fillStyle="#fff8e0";cx.shadowColor="#fff8e0";cx.shadowBlur=14;cx.fillRect(-46,12,10,4);cx.fillRect(36,12,10,4);cx.shadowBlur=0;
   cx.restore();
 }
-function draw(){cx.clearRect(0,0,W,H);if(scene==="rain")racing();else if(mode==="theatre")theatre();else if(mode==="stars")starfield();else back("#05080f","#0d1424")}
+function draw(){if(cv.style.display==="none")return;cx.clearRect(0,0,W,H);if(scene==="rain")racing();else if(mode==="theatre")theatre();else if(mode==="stars")starfield();else back("#05080f","#0d1424")}
 function loop(){t++;draw();requestAnimationFrame(loop)}
 addEventListener("resize",fit);fit();if(!still)loop();
 
 /* ---------- Firebase ---------- */
 if(CONFIG.apiKey.startsWith("PASTE")){$("setup").classList.remove("hidden");$("gBtn").disabled=true;throw new Error("Firebase not configured")}
 const app=initializeApp(CONFIG),auth=getAuth(app),db=getFirestore(app);
-let me=null,unlocked=false,unsubFeed=null,unsubM=null,unsubB=null,photos=[],unsubP=null,unsubF=null,unsubI=null,unsubChat=null,people=[],following=new Set(),convs=[],chatWith=null,chatErr=false,view="feed",members=[],bans=new Set();
+let me=null,unlocked=false,unsubFeed=null,unsubM=null,unsubB=null,photos=[],unsubP=null,unsubF=null,unsubI=null,unsubChat=null,people=[],following=new Set(),convs=[],chatWith=null,chatErr=false,view="feed",prevView="feed",unsubPP=null,unsubPF=null,unsubPG=null,profUid=null,profPosts=[],nFollowers=0,nFollowing=0,allPosts=[],lastLive=0,video=null,siteBg={},members=[],bans=new Set();
 const isAdmin=()=>!!me&&me.email===ADMIN_EMAIL;
 
 onSnapshot(doc(db,"settings","site"),s=>{
@@ -296,7 +347,7 @@ onSnapshot(doc(db,"settings","site"),s=>{
   document.title=d.title||"College Memory Vault";
   if(d.tagline)$("tagline").textContent=d.tagline;
   if(d.accent)document.documentElement.style.setProperty("--accent",d.accent);
-  mode=d.bg||"theatre";if(still)draw();
+  mode=d.bg||"theatre";siteBg={login:d.bgLogin||{},app:d.bgApp||{}};applyMedia();if(still)draw();
 },()=>{});
 
 /* ---------- Login ---------- */
@@ -321,23 +372,24 @@ $("outBtn").onclick=()=>signOut(auth);
 onAuthStateChanged(auth,u=>{me=u;if(!u)unlocked=false;route()});
 function route(){
   const inApp=!!me&&(isAdmin()||unlocked);
-  scene=inApp?"app":"rain";if(still)draw();
+  scene=inApp?"app":"rain";applyMedia();if(still)draw();
   $("login").classList.toggle("hidden",inApp);
   $("bar").classList.toggle("hidden",!inApp);
   $("tabs").classList.toggle("hidden",!inApp);show(inApp?view:"");
   const g=!!me&&!isAdmin()&&!unlocked;
   $("step1").classList.toggle("hidden",g);$("step2").classList.toggle("hidden",!g);
   if(g){$("gpic").src=me.photoURL||"";$("gpic").referrerPolicy="no-referrer";$("gname").textContent=me.displayName||"Student";$("gmail").textContent=me.email||""}
-  [unsubFeed,unsubM,unsubB,unsubP,unsubF,unsubI,unsubChat].forEach(f=>f&&f());unsubFeed=unsubM=unsubB=unsubP=unsubF=unsubI=unsubChat=null;
+  [unsubFeed,unsubM,unsubB,unsubP,unsubF,unsubI,unsubChat,unsubPP,unsubPF,unsubPG].forEach(f=>f&&f());unsubFeed=unsubM=unsubB=unsubP=unsubF=unsubI=unsubChat=unsubPP=unsubPF=unsubPG=null;profUid=null;if(view==="prof")view="feed";
   chatWith=null;$("chat").classList.add("hidden");$("inbox").classList.remove("hidden");
   $("admBtn").classList.toggle("hidden",!(inApp&&isAdmin()));
   if(inApp){
     $("who").textContent=isAdmin()?"Admin":(me.displayName||"Student");
     const nm=isAdmin()?"Admin":(me.displayName||"Student");
     setDoc(doc(db,"profiles",me.uid),{name:nm,nameLower:nm.toLowerCase(),photo:me.photoURL||"",adm:isAdmin()}).catch(()=>{});
-    unsubP=onSnapshot(collection(db,"profiles"),s=>{people=s.docs.map(d=>({id:d.id,...d.data()}));drawPeople();drawInbox()},()=>{});
-    unsubF=onSnapshot(query(collection(db,"follows"),where("from","==",me.uid)),s=>{following=new Set(s.docs.map(d=>d.data().to));drawPeople()},()=>{});
-    unsubI=onSnapshot(query(collection(db,"dms"),where("members","array-contains",me.uid)),s=>{convs=s.docs.map(d=>({id:d.id,...d.data()}));drawInbox()},()=>{});
+    unsubP=onSnapshot(collection(db,"profiles"),s=>{people=s.docs.map(d=>({id:d.id,...d.data()}));drawPeople();drawInbox();if(view==="prof")drawProfile()},()=>{});
+    unsubF=onSnapshot(query(collection(db,"follows"),where("from","==",me.uid)),s=>{following=new Set(s.docs.map(d=>d.data().to));drawPeople();if(view==="prof")drawProfile()},()=>{});
+    unsubI=onSnapshot(query(collection(db,"dms"),where("members","array-contains",me.uid)),s=>{convs=s.docs.map(d=>({id:d.id,...d.data()}));if(chatWith){const cid=[me.uid,chatWith].sort().join("_"),c=convs.find(x=>x.id===cid);if(c&&c.lastAt)markRead(cid,c.lastAt.seconds)}updDot();drawInbox()},()=>{});
+    $("feed").replaceChildren(skel(),skel());
     unsubFeed=onSnapshot(query(collection(db,"posts"),orderBy("createdAt","desc"),limit(50)),
       s=>render(s.docs.map(d=>({id:d.id,...d.data()}))),
       ()=>$("feed").replaceChildren(el("div","glass empty","Could not load posts. You may have been removed, or the Firestore rules are not set.")));
@@ -345,11 +397,17 @@ function route(){
 }
 
 /* ---------- Feed ---------- */
+const isLive=p=>!p.exp||p.exp>Date.now();
+const left=t=>{const m=Math.max(1,Math.round((t-Date.now())/60000));return m>=60?Math.round(m/60)+" h left":m+" min left"};
 function render(posts){
+  if(posts)allPosts=posts;
   const f=$("feed");f.replaceChildren();
-  if(!posts.length){f.append(el("div","glass empty","No memories yet. Be the first to post."));return}
-  posts.forEach(p=>f.append(card(p)));
+  const list=allPosts.filter(isLive);lastLive=list.length;
+  if(!list.length){f.append(el("div","glass empty","No memories yet. Be the first to post."));return}
+  list.forEach(p=>f.append(card(p)));
 }
+setInterval(()=>{if(me&&allPosts.filter(isLive).length!==lastLive)render()},30000);
+function skel(){const c=el("div","glass skel");c.innerHTML='<div class="sk a"></div><div class="sk b"></div><div class="sk c"></div>';return c}
 const IC={heart:'<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 2.7 4.5 6.4 4.5c2.1 0 3.9 1.2 5.6 3.3 1.7-2.1 3.5-3.3 5.6-3.3 3.7 0 5.5 3.9 4 7.3C19.5 16.4 12 21 12 21z"/></svg>',chat:'<svg viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 20.5l1.5-5.2A8.5 8.5 0 1 1 21 11.5z"/></svg>',send:'<svg viewBox="0 0 24 24"><path d="M22 3 2 10.5l7.5 3L12.5 21zM9.5 13.5 22 3"/></svg>',tick:'<svg class="tick" viewBox="0 0 24 24" aria-label="Admin"><circle cx="12" cy="12" r="11" fill="#1d9bf0"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'};
 function icon(k,cls,label,fn){const b=el("button",cls);b.type="button";b.innerHTML=IC[k];b.setAttribute("aria-label",label);b.onclick=fn;return b}
 function toast(t){const x=el("div","toast",t);x.setAttribute("role","status");document.body.append(x);setTimeout(()=>x.remove(),2200)}
@@ -376,7 +434,8 @@ function card(p){
   else ring.append(el("div","ini",(p.name||"S").charAt(0).toUpperCase()));
   const m=el("div"),w=el("div","who",p.name||"Student");
   if(p.adm)w.insertAdjacentHTML("beforeend",IC.tick);
-  m.append(w,el("div","when",p.createdAt?when(p.createdAt.toDate()):"Just now"));
+  m.append(w,el("div","when",(p.createdAt?when(p.createdAt.toDate()):"Just now")+(p.exp?(p.exp>Date.now()?" · in feed, "+left(p.exp):" · expired from feed"):"")));
+  ring.style.cursor="pointer";ring.onclick=()=>openProfile(p.uid);w.style.cursor="pointer";w.onclick=()=>openProfile(p.uid);
   h.append(ring,m);
   if(p.uid===me.uid||isAdmin()){const d=el("button","btn del","Delete");d.onclick=()=>{if(confirm("Delete this post?"))deleteDoc(doc(db,"posts",p.id))};h.append(d)}
   c.append(h);
@@ -395,6 +454,7 @@ function card(p){
     }
   }
   if(p.song){const s=el("iframe","song");s.src="https://www.youtube-nocookie.com/embed/"+p.song;s.title="Song";s.loading="lazy";s.allow="encrypted-media";s.allowFullscreen=true;c.append(s)}
+  if(p.video){const v=el("video","vid");v.src=p.video;v.controls=true;v.playsInline=true;v.preload="metadata";if(p.poster)v.poster=p.poster;c.append(v)}
   const acts=el("div","acts"),inp=el("input");
   acts.append(icon("heart",liked?"on":"","Like",like),icon("chat","","Comment",()=>inp.focus()),icon("send","","Share",()=>share(p,imgs)));
   if(dots)acts.append(dots);
@@ -410,27 +470,6 @@ function card(p){
   cm.append(f);
   b.append(el("div","likes",likes.length+(likes.length===1?" like":" likes")),cap,cm);c.append(b);return c;
 }
-function cardOld(p){
-  const c=el("article","glass post"),h=el("div","head"),av=el("img","av");
-  av.src=p.avatar||"";av.alt="";av.referrerPolicy="no-referrer";
-  const m=el("div");m.append(el("div","who",p.name||"Student"),el("div","when",p.createdAt?p.createdAt.toDate().toLocaleDateString():"Just now"));
-  h.append(av,m);
-  if(me&&(p.uid===me.uid||isAdmin())){const d=el("button","btn del","Delete");d.onclick=()=>{if(confirm("Delete this post?"))deleteDoc(doc(db,"posts",p.id))};h.append(d)}
-  c.append(h);
-  if(p.image){const i=el("img","photo");i.src=p.image;i.alt="Photo shared by "+(p.name||"a student");c.append(i)}
-  if(p.song){const s=el("iframe","song");s.src="https://www.youtube-nocookie.com/embed/"+p.song;s.title="Song";s.loading="lazy";s.allow="encrypted-media";s.allowFullscreen=true;c.append(s)}
-  const b=el("div","body"),likes=p.likes||[],liked=likes.includes(me.uid);
-  const lk=el("button","like"+(liked?" on":""),(liked?"♥ ":"♡ ")+likes.length);lk.setAttribute("aria-label","Like");
-  lk.onclick=()=>updateDoc(doc(db,"posts",p.id),{likes:liked?arrayRemove(me.uid):arrayUnion(me.uid)});
-  b.append(lk,el("div","cap",p.caption||""));
-  const cm=el("div","comments");
-  (p.comments||[]).forEach(x=>{const r=el("p");r.append(el("b",null,(x.name||"Student")+": "),document.createTextNode(x.text));cm.append(r)});
-  const f=el("form","cform"),inp=el("input");inp.type="text";inp.maxLength=300;inp.required=true;inp.placeholder="Reply";inp.setAttribute("aria-label","Reply");
-  const bt=el("button","btn","Reply");bt.type="submit";f.append(inp,bt);
-  f.onsubmit=async e=>{e.preventDefault();const x=inp.value.trim();if(!x)return;inp.value="";
-    await updateDoc(doc(db,"posts",p.id),{comments:arrayUnion({uid:me.uid,name:isAdmin()?"Admin":(me.displayName||"Student"),text:x,t:Date.now()})})};
-  cm.append(f);b.append(cm);c.append(b);return c;
-}
 
 /* ---------- New post ---------- */
 $("newBtn").onclick=()=>{$("perr").textContent="";$("dlg").showModal()};
@@ -444,27 +483,58 @@ $("file").onchange=async e=>{
   catch{$("perr").textContent="One of those photos could not be used.";photos=[];$("prevs").replaceChildren()}
 };
 function ytId(s){const m=s.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/);return m?m[1]:""}
+$("file").addEventListener("change",()=>{video=null;$("vfile").value="";$("vinfo").textContent=""});
+$("vfile").onchange=async e=>{
+  const f=e.target.files[0];video=null;$("vinfo").textContent="";$("perr").textContent="";if(!f)return;
+  if(!CLOUD.name||!CLOUD.preset){$("perr").textContent="Video posting is not set up yet. Ask the admin.";e.target.value="";return}
+  if(f.size>60*1048576){$("perr").textContent="That video is over 60 MB. Pick a shorter or smaller one.";e.target.value="";return}
+  try{
+    const d=await videoLength(f);
+    if(d>61){$("perr").textContent="Videos can be 1 minute at most.";e.target.value="";return}
+    video=f;photos=[];$("prevs").replaceChildren();$("file").value="";
+    $("vinfo").textContent=Math.round(d)+" s · "+(f.size/1048576).toFixed(1)+" MB";
+  }catch{$("perr").textContent="That video could not be read.";e.target.value=""}
+};
+function videoLength(file){return new Promise((ok,no)=>{const v=document.createElement("video");v.preload="metadata";v.onloadedmetadata=()=>{URL.revokeObjectURL(v.src);ok(v.duration)};v.onerror=()=>no();v.src=URL.createObjectURL(file)})}
+function uploadMedia(file,kind,onProg){
+  return new Promise((ok,no)=>{
+    const x=new XMLHttpRequest(),fd=new FormData();
+    fd.append("file",file);fd.append("upload_preset",CLOUD.preset);
+    x.open("POST","https://api.cloudinary.com/v1_1/"+CLOUD.name+"/"+kind+"/upload");
+    x.upload.onprogress=e=>{if(e.lengthComputable)onProg(e.loaded/e.total)};
+    x.onload=()=>{try{const r=JSON.parse(x.responseText);r.secure_url?ok(r):no(new Error("upload"))}catch(e){no(e)}};
+    x.onerror=()=>no(new Error("network"));
+    x.send(fd);
+  });
+}
 $("pform").onsubmit=async e=>{
   e.preventDefault();$("perr").textContent="";
   const link=$("song").value.trim(),id=link?ytId(link):"";
   if(link&&!id){$("perr").textContent="That does not look like a YouTube link.";return}
   $("pub").disabled=true;
   try{
-    await addDoc(collection(db,"posts"),{uid:me.uid,name:isAdmin()?"Admin":(me.displayName||"Student"),avatar:me.photoURL||"",caption:$("cap").value.trim(),images:photos,image:"",song:id,adm:isAdmin(),likes:[],comments:[],createdAt:serverTimestamp()});
-    $("pform").reset();photos=[];$("prevs").replaceChildren();$("dlg").close();
-  }catch{$("perr").textContent="Could not publish. Check your connection."}
-  $("pub").disabled=false;
+    let vurl="",poster="";
+    if(video){
+      $("prog").classList.remove("hidden");
+      const r=await uploadMedia(video,"video",f=>{$("bar").style.width=Math.round(f*100)+"%"});
+      vurl=r.secure_url;poster=vurl.replace(/\.[^./]+$/,".jpg");
+    }
+    const hrs=+$("life").value;
+    await addDoc(collection(db,"posts"),{uid:me.uid,name:isAdmin()?"Admin":(me.displayName||"Student"),avatar:me.photoURL||"",caption:$("cap").value.trim(),images:photos,image:"",video:vurl,poster:poster,song:id,exp:hrs?Date.now()+hrs*3600000:0,adm:isAdmin(),likes:[],comments:[],createdAt:serverTimestamp()});
+    $("pform").reset();photos=[];video=null;$("vinfo").textContent="";$("prevs").replaceChildren();$("dlg").close();toast("Posted");
+  }catch{$("perr").textContent=video?"Upload failed. Check your connection and the video size.":"Could not publish. Check your connection."}
+  $("prog").classList.add("hidden");$("bar").style.width="0";$("pub").disabled=false;
 };
 
 /* ---------- Search, follow, messages ---------- */
 function show(v){
   if(v)view=v;
-  const map={feed:"feed",search:"searchView",msgs:"msgView"};
+  const map={feed:"feed",search:"searchView",msgs:"msgView",prof:"profView"};
   Object.keys(map).forEach(k=>$(map[k]).classList.toggle("hidden",!v||k!==view));
-  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.v===view?"page":"false"));
+  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.v===(view==="prof"&&me&&profUid===me.uid?"me":view)?"page":"false"));
   if(v==="search"||v==="msgs"){drawPeople();drawInbox()}
 }
-document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>show(b.dataset.v));
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>b.dataset.v==="me"?openProfile(me.uid):show(b.dataset.v));
 const person=id=>people.find(x=>x.id===id)||{id,name:"Student",photo:""};
 function avatar(x){const r=el("div","ring");if(x.photo){const i=el("img","av");i.src=x.photo;i.alt="";i.referrerPolicy="no-referrer";r.append(i)}else r.append(el("div","ini",(x.name||"S").charAt(0).toUpperCase()));return r}
 function drawPeople(){
@@ -478,7 +548,8 @@ function drawPeople(){
     const fl=following.has(x.id),f=el("button","btn"+(fl?"":" main"),fl?"Following":"Follow");
     f.onclick=()=>fl?deleteDoc(doc(db,"follows",me.uid+"_"+x.id)):setDoc(doc(db,"follows",me.uid+"_"+x.id),{from:me.uid,to:x.id});
     const m=el("button","btn","Message");m.onclick=()=>openChat(x.id);
-    r.append(avatar(x),d,f,m);box.append(r);
+    const av=avatar(x);av.style.cursor="pointer";av.onclick=()=>openProfile(x.id);d.style.cursor="pointer";d.onclick=()=>openProfile(x.id);
+    r.append(av,d,f,m);box.append(r);
   });
 }
 $("q").oninput=drawPeople;
@@ -489,11 +560,12 @@ function drawInbox(){
   list.forEach(c=>{
     const o=c.members.find(u=>u!==me.uid),pf=person(o),r=el("button","glass prow");r.type="button";
     const d=el("div","pname");d.append(el("b",null,pf.name||"Student"),el("small",null,(c.lastFrom===me.uid?"You: ":"")+(c.last||"")));
-    r.append(avatar(pf),d);r.onclick=()=>openChat(o);box.append(r);
+    const un=c.lastFrom!==me.uid&&(c.lastAt?.seconds||0)>(rd()[c.id]||0);
+    r.append(avatar(pf),d);if(un)r.append(el("span","dot"));r.onclick=()=>openChat(o);box.append(r);
   });
 }
 function openChat(uid){
-  chatWith=uid;show("msgs");
+  chatWith=uid;{const cid=[me.uid,uid].sort().join("_"),c=convs.find(x=>x.id===cid);if(c&&c.lastAt)markRead(cid,c.lastAt.seconds);updDot()}show("msgs");
   $("inbox").classList.add("hidden");$("chat").classList.remove("hidden");
   $("chatName").textContent=person(uid).name||"Student";listenChat();
 }
@@ -521,9 +593,70 @@ $("mform").onsubmit=async e=>{
   }catch{toast("Could not send the message")}
 };
 
+/* ---------- Profiles, unread, backgrounds ---------- */
+const rd=()=>{try{return JSON.parse(localStorage.getItem("scmch_rd")||"{}")}catch{return{}}};
+function markRead(id,sec){const r=rd();if((r[id]||0)<sec){r[id]=sec;try{localStorage.setItem("scmch_rd",JSON.stringify(r))}catch{}}}
+function updDot(){$("msgDot").classList.toggle("hidden",!(me&&convs.some(c=>c.lastFrom!==me.uid&&(c.lastAt?.seconds||0)>(rd()[c.id]||0))))}
+function openProfile(uid){
+  if(view!=="prof")prevView=view;
+  profUid=uid;profPosts=[];nFollowers=0;nFollowing=0;
+  [unsubPP,unsubPF,unsubPG].forEach(f=>f&&f());
+  unsubPP=onSnapshot(query(collection(db,"posts"),where("uid","==",uid),limit(60)),s=>{profPosts=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds??9e9)-(a.createdAt?.seconds??9e9));drawProfile()},()=>{});
+  unsubPF=onSnapshot(query(collection(db,"follows"),where("to","==",uid)),s=>{nFollowers=s.size;drawProfile()},()=>{});
+  unsubPG=onSnapshot(query(collection(db,"follows"),where("from","==",uid)),s=>{nFollowing=s.size;drawProfile()},()=>{});
+  show("prof");drawProfile();window.scrollTo(0,0);
+}
+function drawProfile(){
+  if(!me||!profUid||view!=="prof")return;
+  const pf=person(profUid),box=$("prof");box.replaceChildren();
+  const top=el("div","glass pcard"),info=el("div","pinfo"),nm=el("div","pn");
+  nm.append(el("b",null,pf.name||"Student"));if(pf.adm)nm.insertAdjacentHTML("beforeend",IC.tick);
+  const st=el("div","stats");
+  [[profPosts.length,"posts"],[nFollowers,"followers"],[nFollowing,"following"]].forEach(([n,l])=>{const x=el("div");x.append(el("b",null,String(n)),document.createTextNode(" "+l));st.append(x)});
+  info.append(nm,st);
+  if(profUid!==me.uid){
+    const fl=following.has(profUid),row=el("div","row"),f=el("button","btn"+(fl?"":" main"),fl?"Following":"Follow");
+    f.onclick=()=>fl?deleteDoc(doc(db,"follows",me.uid+"_"+profUid)):setDoc(doc(db,"follows",me.uid+"_"+profUid),{from:me.uid,to:profUid});
+    const m=el("button","btn","Message");m.onclick=()=>openChat(profUid);row.append(f,m);info.append(row);
+  }
+  top.append(avatar(pf),info);box.append(top);
+  const list=$("profPosts");list.replaceChildren();
+  if(!profPosts.length){list.append(el("div","glass empty","No posts yet."));return}
+  profPosts.forEach(p=>list.append(card(p)));
+}
+$("profBack").onclick=()=>show(prevView||"feed");
+function applyMedia(){
+  const b=(scene==="app"?siteBg.app:siteBg.login)||{},v=$("bgvid"),im=$("bgimg"),on=!!b.url&&(b.type==="video"||b.type==="image");
+  cv.style.display=on?"none":"";
+  $("bgmask").classList.toggle("hidden",!on);
+  if(on&&b.type==="video"){
+    if(v.dataset.src!==b.url){v.dataset.src=b.url;v.src=b.url;v.play&&v.play().catch(()=>{})}
+    v.classList.remove("hidden");
+  }else{v.classList.add("hidden");if(v.dataset.src){v.pause();v.removeAttribute("src");v.dataset.src="";v.load()}}
+  if(on&&b.type==="image"){if(im.dataset.src!==b.url){im.dataset.src=b.url;im.src=b.url}im.classList.remove("hidden")}
+  else{im.classList.add("hidden")}
+  if(!on&&still)draw();
+}
+$("saveBg").onclick=async()=>{
+  const out={};
+  try{
+    for(const [key,pre] of [["bgLogin","bl"],["bgApp","ba"]]){
+      const f=$(pre+"File").files[0];let type=$(pre+"Type").value,url=$(pre+"Url").value.trim();
+      if(f){
+        if(!CLOUD.name||!CLOUD.preset){msg("Uploads are not set up yet. Paste a direct link instead.");return}
+        type=f.type.startsWith("video")?"video":"image";
+        msg("Uploading the "+(key==="bgLogin"?"login":"app")+" background...");
+        url=(await uploadMedia(f,type,()=>{})).secure_url;
+      }
+      out[key]=(type==="default"||!url)?{type:"default",url:""}:{type:type,url:url};
+    }
+    await setDoc(doc(db,"settings","site"),out,{merge:true});msg("Backgrounds saved for everyone.");
+  }catch{msg("Could not save the backgrounds.")}
+};
+
 /* ---------- Admin panel ---------- */
 $("admBtn").onclick=async()=>{
-  $("panel").showModal();
+  $("panel").showModal();["bl","ba"].forEach((p,i)=>{const b=(i?siteBg.app:siteBg.login)||{};$(p+"Type").value=b.type||"default";$(p+"Url").value=b.url||""});
   if(!unsubM){
     unsubM=onSnapshot(collection(db,"members"),s=>{members=s.docs.map(d=>({id:d.id,...d.data()}));drawMembers()});
     unsubB=onSnapshot(collection(db,"bans"),s=>{bans=new Set(s.docs.map(d=>d.id));drawMembers()});
